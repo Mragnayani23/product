@@ -1,0 +1,9 @@
+<<<<<<< HEAD
+fastapi
+uvicorn
+reportlab
+=======
+fastapi
+uvicorn
+reportlab
+>>>>>>> fd32d464763a6b4ada6b435112fdaae2f364e6ed
