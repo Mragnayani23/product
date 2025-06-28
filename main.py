@@ -1,5 +1,5 @@
 <<<<<<< HEAD
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
 from reportlab.pdfgen import canvas
