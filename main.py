@@ -13,6 +13,7 @@ app = FastAPI()
 lock = threading.Lock()
 COUNTER_FILE = "counter.txt"
 
+
 class ImageData(BaseModel):
     path: str
     x: float
@@ -61,7 +62,6 @@ async def generate_catalog_pdf(data: ProductData):
     c.setFont("Helvetica-Bold", 12)
     c.setFillColor(colors.grey)
     c.drawString(40, height - 30, "docwise.codexautomationkey.com")
-
     c.setFont("Helvetica-Bold", 14)
     c.setFillColor(colors.black)
     c.drawRightString(width - 40, height - 30, "CODEX AUTOMATION KEY")
@@ -71,57 +71,63 @@ async def generate_catalog_pdf(data: ProductData):
     # Title
     c.setFont("Helvetica-Bold", 18)
     c.setFillColor(colors.darkblue)
-    c.drawCentredString(width / 2, height - 100, data.name.upper())
+    c.drawCentredString(width / 2, height - 80, data.name.upper())
 
-    # Dynamic Images
-    for img in data.images:
-        if os.path.exists(img.path):
-            try:
-                c.drawImage(ImageReader(img.path), x=img.x, y=img.y, width=img.w, height=img.h, preserveAspectRatio=True)
-            except:
-                pass
-
-    # Info Section
-    y_info = height - 140
+    # Product Info
+    y_info = height - 110
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(40, y_info, "PRODUCT DETAILS:")
+    y_info -= 15
+    c.setFont("Helvetica", 9)
     fields = [
-        ("Name", data.name),
         ("HS Code", data.hs_code),
         ("Quantity", data.quantity),
         ("Unit", data.unit),
         ("FCL Type", data.fcl_type),
         ("Packaging", data.packaging),
-        ("Quantity per FCL", data.quantity_per_fcl),
+        ("Quantity per FCL", data.quantity_per_fcl)
     ]
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(40, y_info, "PRODUCT DETAILS:")
-    y_info -= 15
-    c.setFont("Helvetica", 9)
     for label, value in fields:
         if value:
             c.drawString(50, y_info, f"{label}: {value}")
             y_info -= 13
 
     # Description
-    if data.description:
-        y_info -= 10
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(40, y_info, "DESCRIPTION:")
-        y_info -= 15
-        c.setFont("Helvetica", 9)
-        for line in data.description:
-            c.drawString(50, y_info, line)
-            y_info -= 12
+    y_desc = y_info - 20
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(40, y_desc, "DESCRIPTION:")
+    y_desc -= 15
+    c.setFont("Helvetica", 9)
+    for line in data.description:
+        c.drawString(50, y_desc, line)
+        y_desc -= 13
 
-    # Specifications
+    # Specifications (Bottom-Right Box)
+    spec_x = width - 200
+    spec_y = 490
     if data.specifications:
-        y_info -= 10
         c.setFont("Helvetica-Bold", 10)
-        c.drawString(40, y_info, "SPECIFICATIONS:")
-        y_info -= 15
+        c.drawString(spec_x, spec_y, "SPECIFICATIONS:")
+        spec_y -= 15
         c.setFont("Helvetica", 9)
         for spec in data.specifications:
-            c.drawString(55, y_info, f"• {spec}")
-            y_info -= 12
+            c.drawString(spec_x + 10, spec_y, f"• {spec}")
+            spec_y -= 12
+
+    # Images
+    placements = {
+        "su2.jpg": (430, 690, 140, 110),       # Top-right image — slightly larger
+        "raw29.jpg": (60, 370, 300, 160),     # Center main image — wider & taller
+        "raw12.jpg": (400, 140, 140, 90),     # Bottom-left logo — bigger but still balanced
+        "su1.jpg": ( 40, 160, 350, 160)         # Centered above footer
+    }
+    for label, (x, y, w, h) in placements.items():
+        for img in data.images:
+            if img.path == label and os.path.exists(img.path):
+                try:
+                    c.drawImage(ImageReader(img.path), x, y, width=w, height=h, preserveAspectRatio=True)
+                except Exception as e:
+                    print(f"Image error ({label}):", e)
 
     # Footer
     c.setFont("Helvetica", 8)
@@ -129,7 +135,7 @@ async def generate_catalog_pdf(data: ProductData):
     c.drawCentredString(width / 2, 30, "Codex Automation Key, Indore, M.P., India")
     c.drawCentredString(width / 2, 18, "Tel: (+91) 731 2515151 • Email: info@codexautomationkey.com")
 
-    # Finalize
+    # Finalize PDF
     c.save()
     buffer.seek(0)
     return Response(
