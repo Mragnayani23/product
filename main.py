@@ -1,20 +1,18 @@
 from fastapi import FastAPI, Response
 from pydantic import BaseModel
 from typing import List, Optional
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import cm
 from reportlab.pdfgen import canvas
-from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
+from reportlab.lib import colors
 from io import BytesIO
-import os
 import threading
+import os
 
 app = FastAPI()
 lock = threading.Lock()
 COUNTER_FILE = "counter.txt"
 
-# 🧱 Request body schema
 class ImageData(BaseModel):
     path: str
     x: float
@@ -23,18 +21,17 @@ class ImageData(BaseModel):
     h: float
 
 class ProductData(BaseModel):
-    name: Optional[str] = ""
-    description: List[str] = []
-    specifications: List[str] = []
+    name: str
     hs_code: Optional[str] = ""
     quantity: Optional[str] = ""
     unit: Optional[str] = ""
     fcl_type: Optional[str] = ""
     packaging: Optional[str] = ""
     quantity_per_fcl: Optional[str] = ""
+    description: List[str] = []
+    specifications: List[str] = []
     images: List[ImageData] = []
 
-# 🔢 Auto-incrementing PDF number
 def get_next_counter():
     with lock:
         if not os.path.exists(COUNTER_FILE):
@@ -49,74 +46,92 @@ def get_next_counter():
             return count
 
 @app.get("/")
-def root():
-    return {
-        "message": "POST your product data to /generate-catalog-pdf/ to receive a customized PDF."
-    }
+def home():
+    return {"message": "Codex Catalog PDF Generator is running. Use POST /generate-catalog-pdf"}
 
-# 📩 POST endpoint to accept input & return PDF
 @app.post("/generate-catalog-pdf/")
 async def generate_catalog_pdf(data: ProductData):
     pdf_number = get_next_counter()
-    filename = f"catalog_generated_{pdf_number}.pdf"
+    filename = f"Catalog_{pdf_number}.pdf"
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
+    # Header
+    c.setFont("Helvetica-Bold", 12)
+    c.setFillColor(colors.grey)
+    c.drawString(40, height - 30, "docwise.codexautomationkey.com")
+
+    c.setFont("Helvetica-Bold", 14)
+    c.setFillColor(colors.black)
+    c.drawRightString(width - 40, height - 30, "CODEX AUTOMATION KEY")
+    c.setFont("Helvetica", 8)
+    c.drawRightString(width - 40, height - 43, "Product Catalog")
+
     # Title
-    if data.name:
-        c.setFont("Helvetica-Bold", 24)
-        c.setFillColor(colors.darkred)
-        c.drawString(2 * cm, height - 2.5 * cm, data.name)
+    c.setFont("Helvetica-Bold", 18)
+    c.setFillColor(colors.darkblue)
+    c.drawCentredString(width / 2, height - 100, data.name.upper())
+
+    # Dynamic Images
+    for img in data.images:
+        if os.path.exists(img.path):
+            try:
+                c.drawImage(ImageReader(img.path), x=img.x, y=img.y, width=img.w, height=img.h, preserveAspectRatio=True)
+            except:
+                pass
+
+    # Info Section
+    y_info = height - 140
+    fields = [
+        ("Name", data.name),
+        ("HS Code", data.hs_code),
+        ("Quantity", data.quantity),
+        ("Unit", data.unit),
+        ("FCL Type", data.fcl_type),
+        ("Packaging", data.packaging),
+        ("Quantity per FCL", data.quantity_per_fcl),
+    ]
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(40, y_info, "PRODUCT DETAILS:")
+    y_info -= 15
+    c.setFont("Helvetica", 9)
+    for label, value in fields:
+        if value:
+            c.drawString(50, y_info, f"{label}: {value}")
+            y_info -= 13
 
     # Description
     if data.description:
-        c.setFont("Helvetica", 12)
-        c.setFillColor(colors.black)
-        desc = c.beginText(2 * cm, height - 4 * cm)
-        desc.textLine("Description:")
-        desc.textLine("")
+        y_info -= 10
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(40, y_info, "DESCRIPTION:")
+        y_info -= 15
+        c.setFont("Helvetica", 9)
         for line in data.description:
-            desc.textLine(line)
-        c.drawText(desc)
+            c.drawString(50, y_info, line)
+            y_info -= 12
 
     # Specifications
-    c.setFont("Helvetica", 12)
-    spec = c.beginText(11.5 * cm, height - 11 * cm)
     if data.specifications:
-        spec.textLine("Specifications:")
-        spec.textLine("")
-        for line in data.specifications:
-            spec.textLine(line)
-        spec.textLine("")
-    if data.hs_code:
-        spec.textLine(f"• HS Code: {data.hs_code}")
-    if data.quantity:
-        spec.textLine(f"• Quantity: {data.quantity} {data.unit}")
-    if data.fcl_type:
-        spec.textLine(f"• FCL Type: {data.fcl_type}")
-    if data.packaging:
-        spec.textLine(f"• Packaging: {data.packaging}")
-    if data.quantity_per_fcl:
-        spec.textLine(f"• Quantity/FCL: {data.quantity_per_fcl}")
-    c.drawText(spec)
+        y_info -= 10
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(40, y_info, "SPECIFICATIONS:")
+        y_info -= 15
+        c.setFont("Helvetica", 9)
+        for spec in data.specifications:
+            c.drawString(55, y_info, f"• {spec}")
+            y_info -= 12
 
-    # Images (if provided)
-    for img in data.images:
-        if os.path.exists(img.path):
-            c.drawImage(
-                ImageReader(img.path),
-                x=img.x,
-                y=img.y,
-                width=img.w,
-                height=img.h,
-                preserveAspectRatio=True
-            )
+    # Footer
+    c.setFont("Helvetica", 8)
+    c.setFillColor(colors.black)
+    c.drawCentredString(width / 2, 30, "Codex Automation Key, Indore, M.P., India")
+    c.drawCentredString(width / 2, 18, "Tel: (+91) 731 2515151 • Email: info@codexautomationkey.com")
 
-    c.showPage()
+    # Finalize
     c.save()
     buffer.seek(0)
-
     return Response(
         content=buffer.read(),
         media_type="application/pdf",
